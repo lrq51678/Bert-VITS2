@@ -91,7 +91,8 @@ def voice_detection_with_pydub(
         silence_thresh=-42):
     print(denoised_audio_path, ' ', target_path_dir)
     audio = AudioSegment.from_file(denoised_audio_path)
-    segments = split_on_silence(audio, min_silence_len=min_silence_len, silence_thresh=silence_thresh, keep_silence=500)
+    segments = split_on_silence(audio, min_silence_len=min_silence_len, silence_thresh=silence_thresh,
+                                keep_silence=500, seek_step=20)
     total_len = 0
     for i, segment in enumerate(segments):
         segment_duration = len(segment)
@@ -547,9 +548,9 @@ if __name__ == "__main__":
         with gr.Row():
             with gr.Column():
                 with gr.Row():
-                    preprocess_text_btn = gr.Button(value="2.1 生成训练集和验证集标注文本", variant="primary")
+                    resample_btn = gr.Button(value="2.1 音频重采样到44100hz(音频从raw转到dataset)", variant="primary")
                 with gr.Row():
-                    resample_btn = gr.Button(value="2.2 音频重采样到44100hz(音频从raw转到dataset)", variant="primary")
+                    preprocess_text_btn = gr.Button(value="2.2 生成训练集和验证集标注文本", variant="primary")
                 with gr.Row():
                     slider_bert_gen = gr.Slider(value=2, step=1, label="bert处理线程数", minimum=1, maximum=12)
                 with gr.Row():
