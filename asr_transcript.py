@@ -1,14 +1,12 @@
-import os
-from modelscope.pipelines import pipeline
-from modelscope.utils.constant import Tasks
-from modelscope.utils.logger import get_logger
-import logging
 import argparse
 import concurrent.futures
+import os
+
+from loguru import logger
+from modelscope.pipelines import pipeline
+from modelscope.utils.constant import Tasks
 from tqdm import tqdm
 
-logger = get_logger(log_level=logging.CRITICAL)
-logger.setLevel(logging.CRITICAL)
 os.environ["MODELSCOPE_CACHE"] = "./"
 
 
@@ -19,8 +17,8 @@ def transcribe_worker(file_path: str, inference_pipeline):
     rec_result = inference_pipeline(audio_in=file_path)
     text = str(rec_result.get('text', '')).strip()
     text_without_spaces = text.replace(" ", "")
-    logger.critical(file_path)
-    logger.critical("text: " + text_without_spaces)
+    logger.info(file_path)
+    logger.info("text: " + text_without_spaces)
     return text_without_spaces
 
 
@@ -29,7 +27,7 @@ def transcribe_folder_parallel(folder_path, language, max_workers=4):
     Transcribe all .wav files in the given folder using ThreadPoolExecutor.
     """
     logger.critical(f"parallel transcribe: {folder_path}|{language}|{max_workers}")
-    if language == "JP(日语)":
+    if language == "JP":
         workers = [
             pipeline(
                 task=Tasks.auto_speech_recognition,
@@ -38,7 +36,7 @@ def transcribe_folder_parallel(folder_path, language, max_workers=4):
             for _ in range(max_workers)
         ]
 
-    else:
+    elif language == "ZH":
         workers = [
             pipeline(
                 task=Tasks.auto_speech_recognition,
@@ -47,6 +45,15 @@ def transcribe_folder_parallel(folder_path, language, max_workers=4):
             )
             for _ in range(max_workers)
         ]
+    else:
+        workers = [
+            pipeline(
+                task=Tasks.auto_speech_recognition,
+                model='damo/speech_UniASR_asr_2pass-en-16k-common-vocab1080-tensorflow1-offline'
+            )
+            for _ in range(max_workers)
+        ]
+
     file_paths = []
     for root, _, files in os.walk(folder_path):
         for file in files:
@@ -70,7 +77,7 @@ def transcribe_folder_parallel(folder_path, language, max_workers=4):
                     lab_file_path = os.path.splitext(file_path)[0] + ".lab"
                     with open(lab_file_path, "w", encoding="utf-8") as lab_file:
                         lab_file.write(transcription)
-    logger.critical("已经将wav文件转写为同名的.lab文件, 都在raw文件夹下")
+    logger.critical("已经将wav文件转写为同名的.lab文件")
 
 
 if __name__ == "__main__":
@@ -79,7 +86,7 @@ if __name__ == "__main__":
         "-f", "--filepath", default='./raw/lzy_zh', help="path of your model"
     )
     parser.add_argument(
-        "-l", "--language", default='ZH(中文)', help="language"
+        "-l", "--language", default='ZH', help="language"
     )
     parser.add_argument(
         "-w", "--workers", default='1', help="trans workers"
