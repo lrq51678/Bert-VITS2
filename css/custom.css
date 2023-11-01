@@ -10,3 +10,9 @@
     flex-grow: inherit;
     overflow-y: auto;
 }
+
+#gpu_code {
+    height: 300px;
+    flex-grow: inherit;
+    overflow-y: auto;
+}

@@ -5,7 +5,10 @@ import signal
 import subprocess
 import webbrowser
 
+import GPUtil
 import gradio as gr
+import psutil
+import torch
 import yaml
 from loguru import logger
 
@@ -48,6 +51,11 @@ def load_json_data_in_raw(json_path):
     return formatted_json_data
 
 
+def load_json_data_in_fact(json_path):
+    with open(json_path, 'r', encoding='utf-8') as file:
+        json_data = json.load(file)
+    return json_data
+
 def load_yaml_data_in_fact(yml_path=yml_config):
     with open(yml_path, 'r', encoding='utf-8') as file:
         yml = yaml.safe_load(file)
@@ -61,6 +69,10 @@ def write_yaml_data_in_fact(yml, yml_path=yml_config):
         # data = file.read()
     return yml
 
+
+def write_json_data_in_fact(json_path, json_data):
+    with open(json_path, 'w', encoding='utf-8') as file:
+        json.dump(json_data, file, ensure_ascii=False, indent=2)
 
 def check_if_exists_model(paths: list[str]):
     check_results = {path: os.path.exists(path) and os.path.isfile(path) for path in paths}
@@ -173,7 +185,7 @@ def modify_train_param(bs, nc, li, ei, ep, lr, ver):
     )
 
 
-def modify_infer_param(model_path, config_path, port, share, debug):
+def modify_infer_param(model_path, config_path, port, share, debug, ver):
     yml = load_yaml_data_in_fact()
     data_path = yml['dataset_path']
     yml['webui']['model'] = os.path.relpath(model_path, start=data_path)
@@ -184,9 +196,59 @@ def modify_infer_param(model_path, config_path, port, share, debug):
     yml['webui']['share'] = share
     yml['webui']['debug'] = debug
     write_yaml_data_in_fact(yml)
-    msg = f"修改推理配置文件成功: [{model_path}, {config_path}, {port}]"
+    json_data = load_json_data_in_fact(config_path)
+    json_data['version'] = ver
+    write_json_data_in_fact(config_path, json_data)
+    msg = f"修改推理配置文件成功: [{model_path}, {config_path}, {port}, {ver}]"
     logger.info(msg)
-    return gr.Textbox(value=msg), gr.Code(value=load_yaml_data_in_raw())
+    return gr.Textbox(value=msg), gr.Code(value=load_yaml_data_in_raw()), \
+        gr.Code(label=config_path,
+                value=load_json_data_in_raw(config_path)
+                if os.path.exists(config_path) else load_json_data_in_raw(default_config_path)
+                )
+
+
+def get_status():
+    """获取电脑运行状态"""
+    cpu_percent = psutil.cpu_percent(interval=1)
+    memory_info = psutil.virtual_memory()
+    memory_total = memory_info.total
+    memory_available = memory_info.available
+    memory_used = memory_info.used
+    memory_percent = memory_info.percent
+    gpuInfo = []
+    devices = ["cpu"]
+    for i in range(torch.cuda.device_count()):
+        devices.append(f"cuda:{i}")
+    gpus = GPUtil.getGPUs()
+    for gpu in gpus:
+        gpuInfo.append(
+            {
+                "gpu_id": gpu.id,
+                "gpu_load": gpu.load,
+                "gpu_memory": {
+                    "total": gpu.memoryTotal,
+                    "used": gpu.memoryUsed,
+                    "free": gpu.memoryFree,
+                },
+            }
+        )
+    status_data = {
+        "devices": devices,
+        "CPU占用率": f"{cpu_percent} %",
+        "总内存": f"{memory_total // (1024 * 1024)} MB",
+        "可用内存": f"{memory_available // (1024 * 1024)} MB",
+        "已使用内存": f"{memory_used // (1024 * 1024)} MB",
+        "百分数": f"{memory_percent} %",
+        "gpu信息": gpuInfo,
+    }
+    formatted_json_data = json.dumps(status_data, ensure_ascii=False, indent=2)
+    logger.info(formatted_json_data)
+    return str(formatted_json_data)
+
+
+def get_gpu_status():
+    return gr.Code(value=get_status())
 
 
 def list_infer_models():
@@ -216,7 +278,7 @@ def do_transcript(lang, workers):
     yml = load_yaml_data_in_fact()
     data_path = yml['dataset_path']
     in_dir = os.path.join(data_path, yml['resample']['in_dir'])
-    cmd = f'python asr_transcript.py -f {in_dir} -l {lang} -w {workers}'
+    cmd = f'python asr_transcript.py -f \"{in_dir}\" -l {lang} -w {workers}'
     logger.info(cmd)
     subprocess.run(cmd, shell=True)
     return gr.Textbox(value="转写到.lab完成!")
@@ -227,7 +289,7 @@ def do_clean_list(ban_chars, unclean, clean):
     data_path = yml['dataset_path']
     unclean = os.path.join(data_path, unclean).replace('\\', '/')
     clean = os.path.join(data_path, clean).replace('\\', '/')
-    cmd = f'python clean_list.py -c {ban_chars} -i {unclean} -o {clean}'
+    cmd = f'python clean_list.py -c \"{ban_chars}\" -i \"{unclean}\" -o \"{clean}\"'
     logger.info(cmd)
     subprocess.run(cmd, shell=True)
     return gr.Textbox(value="清洗标注文本完成!")
@@ -660,6 +722,13 @@ if __name__ == '__main__':
                                     value=init_yml['webui']['port'],
                                     interactive=True
                                 )
+                                infer_ver_box = gr.Dropdown(
+                                    label="更改推理版本",
+                                    info="已经实现兼容推理，请选择合适的版本",
+                                    choices=['2.0', '1.1.1-dev', '1.1.1-fix', '1.1.1', '1.1.0', '1.0.1', '1.0'],
+                                    value='2.0'
+                                )
+                            with gr.Row():
                                 radio_webui_share = gr.Radio(
                                     label="公开",
                                     info="是否公开部署，对外网开放",
@@ -707,7 +776,15 @@ if __name__ == '__main__':
                         elem_id="yml_code"
                     )
                 with gr.TabItem("训练的json配置文件"):
-                    code_config_json = gr.Code(
+                    code_train_config_json = gr.Code(
+                        interactive=False,
+                        label=default_config_path,
+                        value=load_json_data_in_raw(default_config_path),
+                        language="json",
+                        elem_id="json_code"
+                    )
+                with gr.TabItem("推理的json配置文件"):
+                    code_infer_config_json = gr.Code(
                         interactive=False,
                         label=default_config_path,
                         value=load_json_data_in_raw(default_config_path),
@@ -715,7 +792,14 @@ if __name__ == '__main__':
                         elem_id="json_code"
                     )
                 with gr.TabItem("其他状态"):
-                    pre_pth_btn2 = gr.Button(value="预处理")
+                    code_gpu_json = gr.Code(label="本机资源使用情况",
+                                            interactive=False,
+                                            value=get_status(),
+                                            language="json",
+                                            elem_id="gpu_code")
+                    gpu_json_btn = gr.Button(
+                        value="刷新本机状态"
+                    )
 
         check_pth_btn1.click(fn=check_bert_models,
                              inputs=[],
@@ -765,7 +849,7 @@ if __name__ == '__main__':
                                  inputs=[slider_batch_size, slider_keep_ckpts,
                                          slider_log_interval, slider_eval_interval,
                                          slider_epochs, slider_lr, dropdown_version],
-                                 outputs=[train_output_box, code_config_json])
+                                 outputs=[train_output_box, code_train_config_json])
         train_btn.click(fn=do_train_ms,
                         inputs=[],
                         outputs=[train_output_box])
@@ -778,8 +862,8 @@ if __name__ == '__main__':
         infer_config_btn.click(
             fn=modify_infer_param,
             inputs=[dropdown_infer_model, dropdown_infer_config,
-                    webui_port_box, radio_webui_share, radio_webui_debug],
-            outputs=[infer_webui_box, code_config_yml]
+                    webui_port_box, radio_webui_share, radio_webui_debug, infer_ver_box],
+            outputs=[infer_webui_box, code_config_yml, code_infer_config_json]
         )
         infer_webui_btn.click(
             fn=do_webui_infer,
@@ -790,6 +874,11 @@ if __name__ == '__main__':
             fn=stop_webui_infer,
             inputs=[webui_port_box],
             outputs=[infer_webui_box]
+        )
+        gpu_json_btn.click(
+            fn=get_gpu_status,
+            inputs=[],
+            outputs=[code_gpu_json]
         )
     os.environ["no_proxy"] = "localhost,127.0.0.1,0.0.0.0"
     webbrowser.open("http://127.0.0.1:6006")
