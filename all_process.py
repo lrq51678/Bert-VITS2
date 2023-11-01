@@ -290,7 +290,7 @@ def do_extract(raw_path, lang):
     char_name = os.path.basename(data_path)
     wav_path = os.path.join(data_path, raw_path)
     char_filelist_path = os.path.join(data_path, "filelists/yuanshen.list").replace('\\', '/')
-    cmd = f'python extract_list. -f \"{wav_path}\" -l {lang} -n \"{char_name}\" -o \"{char_filelist_path}\"'
+    cmd = f'python extract_list.py -f \"{wav_path}\" -l {lang} -n \"{char_name}\" -o \"{char_filelist_path}\"'
     logger.critical(cmd)
     subprocess.run(cmd, shell=True)
     return gr.Textbox(value="提取完成!")
