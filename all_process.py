@@ -284,11 +284,23 @@ def do_transcript(lang, workers):
     return gr.Textbox(value="转写到.lab完成!")
 
 
-def do_clean_list(ban_chars, unclean, clean):
+def do_extract(raw_path, lang):
     yml = load_yaml_data_in_fact()
     data_path = yml['dataset_path']
-    unclean = os.path.join(data_path, unclean).replace('\\', '/')
-    clean = os.path.join(data_path, clean).replace('\\', '/')
+    char_name = os.path.basename(data_path)
+    wav_path = os.path.join(data_path, raw_path)
+    char_filelist_path = os.path.join(data_path, "filelists/yuanshen.list").replace('\\', '/')
+    cmd = f'python extract_list. -f \"{wav_path}\" -l {lang} -n \"{char_name}\" -o \"{char_filelist_path}\"'
+    logger.critical(cmd)
+    subprocess.run(cmd, shell=True)
+    return gr.Textbox(value="提取完成!")
+
+
+def do_clean_list(ban_chars):
+    yml = load_yaml_data_in_fact()
+    data_path = yml['dataset_path']
+    unclean = os.path.join(data_path, "filelists/yuanshen.list").replace('\\', '/')
+    clean = os.path.join(data_path, "filelists/genshin.list").replace('\\', '/')
     cmd = f'python clean_list.py -c \"{ban_chars}\" -i \"{unclean}\" -o \"{clean}\"'
     logger.info(cmd)
     subprocess.run(cmd, shell=True)
@@ -512,6 +524,10 @@ if __name__ == '__main__':
                                 )
                                 clean_trans_btn = gr.Button(
                                     value="2.3 清洗标注"
+                                )
+                            with gr.Row():
+                                preprocess_status_box = gr.Textbox(
+                                    label="标注状态"
                                 )
                         with gr.TabItem("3. 文本预处理"):
                             with gr.Row():
@@ -831,10 +847,13 @@ if __name__ == '__main__':
                            outputs=[resample_status])
         transcribe_btn.click(fn=do_transcript,
                              inputs=[dropdown_lang, slider_transcribe],
-                             outputs=[label_status])
+                             outputs=[preprocess_status_box])
+        extract_list_btn.click(fn=do_extract,
+                               inputs=[resample_in_box, dropdown_lang],
+                               outputs=[preprocess_status_box])
         clean_trans_btn.click(fn=do_clean_list,
-                              inputs=[clean_txt_box, dropdown_filelist_path, dropdown_filelist_path],
-                              outputs=[label_status])
+                              inputs=[clean_txt_box],
+                              outputs=[preprocess_status_box])
         bert_config_btn.click(fn=modify_bert_config,
                               inputs=[bert_config_box, slider_bert_nps, dropdown_bert_dev, radio_bert_multi],
                               outputs=[bert_config_box, slider_bert_nps, dropdown_bert_dev, radio_bert_multi,
