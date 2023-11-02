@@ -1,6 +1,7 @@
 import json
 import os
 import platform
+import shutil
 import signal
 import subprocess
 import webbrowser
@@ -62,6 +63,24 @@ def load_yaml_data_in_fact(yml_path=yml_config):
         # data = file.read()
     return yml
 
+
+def load_train_param(cfg_path):
+    yml = load_yaml_data_in_fact()
+    data_path = yml['dataset_path']
+    train_json_path = os.path.join(data_path, cfg_path).replace("\\", "/")
+    json_data = load_json_data_in_fact(train_json_path)
+    bs = json_data['train']['batch_size']
+    nc = json_data['train']['keep_ckpts']
+    li = json_data['train']['log_interval']
+    ei = json_data['train']['eval_interval']
+    ep = json_data['train']['epochs']
+    lr = json_data['train']['learning_rate']
+    ver = json_data['version']
+    msg = f"加载训练配置文件: {train_json_path}"
+    logger.info(msg)
+    return gr.Textbox(value=msg), gr.Code(label=train_json_path, value=load_yaml_data_in_raw(train_json_path)), \
+        gr.Slider(value=bs), gr.Slider(value=nc), gr.Slider(value=li), gr.Slider(value=ei), \
+        gr.Slider(value=ep), gr.Slider(value=lr), gr.Dropdown(value=ver)
 
 def write_yaml_data_in_fact(yml, yml_path=yml_config):
     with open(yml_path, 'w', encoding='utf-8') as file:
@@ -134,11 +153,15 @@ def modify_resample_path(in_dir, out_dir, sr):
 
 def modify_bert_config(cfg_path, nps, dev, multi):
     yml = load_yaml_data_in_fact()
+    data_path = yml['dataset_path']
     yml['bert_gen']['config_path'] = cfg_path
     yml['bert_gen']['num_processes'] = int(nps)
     yml['bert_gen']['device'] = dev
     yml['bert_gen']['use_multi_device'] = multi
     write_yaml_data_in_fact(yml)
+    whole_path = os.path.join(data_path, cfg_path).replace("\\", "/")
+    if not os.path.exists(whole_path):
+        shutil.copy("configs/config.json", whole_path)
     return gr.Textbox(value=cfg_path), gr.Slider(value=int(nps)), \
         gr.Dropdown(value=dev), gr.Radio(value=multi), gr.Code(value=load_yaml_data_in_raw())
 
@@ -158,6 +181,8 @@ def modify_train_param(bs, nc, li, ei, ep, lr, ver):
     json_path = yml['train_ms']['config_path']
     whole_path = os.path.join(data_path, json_path).replace('\\', '/')
     ok = False
+    if not os.path.exists(whole_path):
+        shutil.copy("configs/config.json", whole_path)
     if os.path.exists(whole_path) and os.path.isfile(whole_path):
         ok = True
         with open(whole_path, 'r', encoding='utf-8') as file:
@@ -650,7 +675,7 @@ if __name__ == '__main__':
                                     scale=20
                                 )
                             with gr.Row():
-                                train_config_box_2 = gr.Textbox(
+                                train_dataset_box_2 = gr.Textbox(
                                     label="数据集存放路径",
                                     text_align="right",
                                     value=str(init_yml['dataset_path']).rstrip('/'),
@@ -674,7 +699,7 @@ if __name__ == '__main__':
                                     value="更改训练路径配置"
                                 )
                             CheckboxGroup_train_models = check_base_models()
-                            check_pth_btn3 = gr.Button(value="检查训练底膜状态")
+                            check_pth_btn3 = gr.Button(value="检查训练底模状态")
                         with gr.TabItem("训练参数设置"):
                             with gr.Row():
                                 slider_batch_size = gr.Slider(minimum=1, maximum=40, value=4, step=1,
@@ -694,11 +719,15 @@ if __name__ == '__main__':
                             with gr.Row():
                                 dropdown_version = gr.Dropdown(
                                     label="模型版本选择",
-                                    info="推荐使用最新版底膜和版本训练",
+                                    info="推荐使用最新版底模和版本训练",
                                     choices=['2.0', '1.1.1-dev', '1.1.1-fix', '1.1.1', '1.1.0', '1.0.1', '1.0'],
                                     value='2.0'
                                 )
                             with gr.Row():
+                                train_ms_load_btn = gr.Button(
+                                    value="加载训练参数配置",
+                                    variant="primary"
+                                )
                                 train_ms_param_btn = gr.Button(
                                     value="更改训练参数配置",
                                     variant="primary"
@@ -834,7 +863,7 @@ if __name__ == '__main__':
         data_path_btn.click(fn=modify_data_path,
                             inputs=[dropdown_data_path],
                             outputs=[dropdown_data_path, bert_dataset_box,
-                                     train_dataset_box_1, train_config_box_2,
+                                     train_dataset_box_1, train_dataset_box_2,
                                      code_config_yml, CheckboxGroup_train_models])
         preprocess_config_btn.click(fn=modify_preprocess_param,
                                     inputs=[dropdown_filelist_path, preprocess_config_box,
@@ -866,6 +895,13 @@ if __name__ == '__main__':
         bert_gen_btn.click(fn=do_bert_gen,
                            inputs=[],
                            outputs=[bert_status])
+        train_ms_load_btn.click(fn=load_train_param,
+                                inputs=[train_config_box],
+                                outputs=[train_output_box, code_train_config_json,
+                                         slider_batch_size, slider_keep_ckpts,
+                                         slider_log_interval, slider_eval_interval,
+                                         slider_epochs, slider_lr, dropdown_version,
+                                         ])
         train_ms_path_btn.click(fn=modify_train_path,
                                 inputs=[train_model_box, train_config_box],
                                 outputs=[train_model_box, train_config_box, code_config_yml])
@@ -875,7 +911,7 @@ if __name__ == '__main__':
                                          slider_epochs, slider_lr, dropdown_version],
                                  outputs=[train_output_box, code_train_config_json])
         train_btn.click(fn=do_train_ms,
-                        inputs=[],
+                        inputs=[train_config_box],
                         outputs=[train_output_box])
         train_btn_2.click(fn=do_train_ms,
                           inputs=[],
