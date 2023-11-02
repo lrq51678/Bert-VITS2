@@ -57,6 +57,7 @@ def load_json_data_in_fact(json_path):
         json_data = json.load(file)
     return json_data
 
+
 def load_yaml_data_in_fact(yml_path=yml_config):
     with open(yml_path, 'r', encoding='utf-8') as file:
         yml = yaml.safe_load(file)
@@ -82,6 +83,7 @@ def load_train_param(cfg_path):
         gr.Slider(value=bs), gr.Slider(value=nc), gr.Slider(value=li), gr.Slider(value=ei), \
         gr.Slider(value=ep), gr.Slider(value=lr), gr.Dropdown(value=ver)
 
+
 def write_yaml_data_in_fact(yml, yml_path=yml_config):
     with open(yml_path, 'w', encoding='utf-8') as file:
         yaml.safe_dump(yml, file, allow_unicode=True)
@@ -92,6 +94,7 @@ def write_yaml_data_in_fact(yml, yml_path=yml_config):
 def write_json_data_in_fact(json_path, json_data):
     with open(json_path, 'w', encoding='utf-8') as file:
         json.dump(json_data, file, ensure_ascii=False, indent=2)
+
 
 def check_if_exists_model(paths: list[str]):
     check_results = {path: os.path.exists(path) and os.path.isfile(path) for path in paths}
@@ -245,19 +248,20 @@ def get_status():
     devices = ["cpu"]
     for i in range(torch.cuda.device_count()):
         devices.append(f"cuda:{i}")
-    gpus = GPUtil.getGPUs()
-    for gpu in gpus:
-        gpuInfo.append(
-            {
-                "gpu_id": gpu.id,
-                "gpu_load": gpu.load,
-                "gpu_memory": {
-                    "total": gpu.memoryTotal,
-                    "used": gpu.memoryUsed,
-                    "free": gpu.memoryFree,
-                },
-            }
-        )
+    if torch.cuda.device_count() > 0:
+        gpus = GPUtil.getGPUs()
+        for gpu in gpus:
+            gpuInfo.append(
+                {
+                    "gpu_id": gpu.id,
+                    "gpu_load": gpu.load,
+                    "gpu_memory": {
+                        "total": gpu.memoryTotal,
+                        "used": gpu.memoryUsed,
+                        "free": gpu.memoryFree,
+                    },
+                }
+            )
     status_data = {
         "devices": devices,
         "CPU占用率": f"{cpu_percent} %",
@@ -434,7 +438,7 @@ if __name__ == '__main__':
                         #### 请订阅我的频道: 
                         1. Bilibili： [spicysama](https://space.bilibili.com/47278440)
                         2. github： [AnyaCoder](https://github.com/AnyaCoder)
-                        
+
                         ### 严禁将此项目用于一切违反《中华人民共和国宪法》，《中华人民共和国刑法》，《中华人民共和国治安管理处罚法》和《中华人民共和国民法典》之用途。
                         ### 严禁用于任何政治相关用途。
                         ## References
@@ -447,7 +451,7 @@ if __name__ == '__main__':
                         <a href="https://github.com/AnyaCoder/Bert-VITS2/graphs/contributors">
                           <img src="https://contrib.rocks/image?repo=AnyaCoder/Bert-VITS2" />
                         </a>
-                        
+
                         Made with [contrib.rocks](https://contrib.rocks).
 
                     """)
