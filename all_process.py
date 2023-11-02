@@ -911,7 +911,7 @@ if __name__ == '__main__':
                                          slider_epochs, slider_lr, dropdown_version],
                                  outputs=[train_output_box, code_train_config_json])
         train_btn.click(fn=do_train_ms,
-                        inputs=[train_config_box],
+                        inputs=[],
                         outputs=[train_output_box])
         train_btn_2.click(fn=do_train_ms,
                           inputs=[],
