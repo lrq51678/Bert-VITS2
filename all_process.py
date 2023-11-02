@@ -267,8 +267,8 @@ def list_infer_models():
     return gr.Dropdown(choices=inf_models), gr.Dropdown(choices=json_files)
 
 
-def do_resample():
-    cmd = 'python resample.py'
+def do_resample(nps):
+    cmd = f'python resample.py --processes {nps}'
     logger.critical(cmd)
     subprocess.run(cmd, shell=True)
     return gr.Textbox(value="重采样完成!")
@@ -470,10 +470,15 @@ if __name__ == '__main__':
                                     value=init_yml['resample']['out_dir'],
                                     interactive=True
                                 )
+                            with gr.Row():
                                 dropdown_resample_sr = gr.Dropdown(
                                     label="输出采样率(Hz)",
                                     choices=['16000', '22050', '44100', '48000'],
                                     value='44100'
+                                )
+                                slider_resample_nps = gr.Slider(
+                                    label="采样用的CPU核心数",
+                                    minimum=1, maximum=64, step=1, value=2
                                 )
                             with gr.Row():
                                 resample_config_btn = gr.Button(
@@ -843,7 +848,7 @@ if __name__ == '__main__':
                                   outputs=[resample_in_box, resample_out_box, resample_status, dropdown_resample_sr,
                                            code_config_yml])
         resample_btn.click(fn=do_resample,
-                           inputs=[],
+                           inputs=[slider_resample_nps],
                            outputs=[resample_status])
         transcribe_btn.click(fn=do_transcript,
                              inputs=[dropdown_lang, slider_transcribe],
