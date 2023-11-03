@@ -361,8 +361,9 @@ def do_bert_gen():
 
 
 def do_train_ms():
-    subprocess.run('python train_ms.py', shell=True)
     yml = load_yaml_data_in_fact()
+    n_gpus = torch.cuda.device_count()
+    subprocess.run(f'torchrun --nproc_per_node={n_gpus} train_ms.py', shell=True)
     webui_port = yml['train_ms']['env']['MASTER_PORT']
     url = f'http://localhost:{webui_port}'
     msg = f"训练开始!\nMASTER_URL: {url}"
