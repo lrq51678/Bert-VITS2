@@ -636,6 +636,7 @@ if __name__ == '__main__':
                                     interactive=True,
                                     scale=10
                                 )
+                            with gr.Row():
                                 slider_bert_nps = gr.Slider(
                                     label="bert_gen并行处理数",
                                     minimum=1,
@@ -643,7 +644,6 @@ if __name__ == '__main__':
                                     step=1,
                                     value=init_yml['bert_gen']['num_processes']
                                 )
-                            with gr.Row():
                                 dropdown_bert_dev = gr.Dropdown(
                                     label="bert_gen处理设备",
                                     choices=['cuda', 'cpu'],
