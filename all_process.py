@@ -324,9 +324,10 @@ def do_transcript(lang, workers):
 def do_extract(raw_path, lang):
     yml = load_yaml_data_in_fact()
     data_path = yml['dataset_path']
+    transcription_path = yml['preprocess_text']['transcription_path']
     char_name = os.path.basename(data_path)
     wav_path = os.path.join(data_path, raw_path)
-    char_filelist_path = os.path.join(data_path, "filelists/yuanshen.list").replace('\\', '/')
+    char_filelist_path = os.path.join(data_path, os.path.splitext(transcription_path)[0] + ".txt").replace('\\', '/')
     cmd = f'python extract_list.py -f \"{wav_path}\" -l {lang} -n \"{char_name}\" -o \"{char_filelist_path}\"'
     logger.critical(cmd)
     subprocess.run(cmd, shell=True)
@@ -335,9 +336,10 @@ def do_extract(raw_path, lang):
 
 def do_clean_list(ban_chars):
     yml = load_yaml_data_in_fact()
+    transcription_path = yml['preprocess_text']['transcription_path']
     data_path = yml['dataset_path']
-    unclean = os.path.join(data_path, "filelists/yuanshen.list").replace('\\', '/')
-    clean = os.path.join(data_path, "filelists/genshin.list").replace('\\', '/')
+    unclean = os.path.join(data_path, os.path.splitext(transcription_path)[0] + ".txt").replace('\\', '/')
+    clean = os.path.join(data_path, transcription_path).replace('\\', '/')
     cmd = f'python clean_list.py -c \"{ban_chars}\" -i \"{unclean}\" -o \"{clean}\"'
     logger.info(cmd)
     subprocess.run(cmd, shell=True)
@@ -363,6 +365,7 @@ def do_bert_gen():
 def do_train_ms():
     yml = load_yaml_data_in_fact()
     n_gpus = torch.cuda.device_count()
+    # subprocess.run(f'python train_ms.py', shell=True)
     subprocess.run(f'torchrun --nproc_per_node={n_gpus} train_ms.py', shell=True)
     webui_port = yml['train_ms']['env']['MASTER_PORT']
     url = f'http://localhost:{webui_port}'
