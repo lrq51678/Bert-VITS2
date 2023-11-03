@@ -71,7 +71,7 @@ def load_train_param(cfg_path):
     train_json_path = os.path.join(data_path, cfg_path).replace("\\", "/")
     json_data = load_json_data_in_fact(train_json_path)
     bs = json_data['train']['batch_size']
-    nc = json_data['train']['keep_ckpts']
+    nc = json_data['train'].get('keep_ckpts', 5)
     li = json_data['train']['log_interval']
     ei = json_data['train']['eval_interval']
     ep = json_data['train']['epochs']
@@ -113,7 +113,8 @@ def check_emo_models():
 def check_base_models():
     yml = load_yaml_data_in_fact()
     data_path = yml['dataset_path']
-    model_paths = [os.path.join(data_path, p).replace('\\', '/') for p in train_base_model_paths]
+    models_dir = yml['train_ms']['model']
+    model_paths = [os.path.join(data_path, models_dir, p).replace('\\', '/') for p in train_base_model_paths]
     return gr.CheckboxGroup(
         label="检测底模状态",
         info="最好去下载底模进行训练",
@@ -134,11 +135,16 @@ def modify_data_path(data_path):
 
 def modify_preprocess_param(trans_path, cfg_path, val_per_spk, max_val_total):
     yml = load_yaml_data_in_fact()
+    data_path = yml['dataset_path']
     yml['preprocess_text']['transcription_path'] = trans_path
     yml['preprocess_text']['config_path'] = cfg_path
     yml['preprocess_text']['val_per_spk'] = val_per_spk
     yml['preprocess_text']['max_val_total'] = max_val_total
     write_yaml_data_in_fact(yml)
+    whole_path = os.path.join(data_path, cfg_path).replace("\\", "/")
+    logger.info("config_path: ", whole_path)
+    if not os.path.exists(whole_path):
+        shutil.copy("configs/config.json", os.path.dirname(whole_path))
     return gr.Dropdown(value=trans_path), gr.Code(value=load_yaml_data_in_raw())
 
 
@@ -163,8 +169,9 @@ def modify_bert_config(cfg_path, nps, dev, multi):
     yml['bert_gen']['use_multi_device'] = multi
     write_yaml_data_in_fact(yml)
     whole_path = os.path.join(data_path, cfg_path).replace("\\", "/")
+    logger.info("config_path: ", whole_path)
     if not os.path.exists(whole_path):
-        shutil.copy("configs/config.json", whole_path)
+        shutil.copy("configs/config.json", os.path.dirname(whole_path))
     return gr.Textbox(value=cfg_path), gr.Slider(value=int(nps)), \
         gr.Dropdown(value=dev), gr.Radio(value=multi), gr.Code(value=load_yaml_data_in_raw())
 
@@ -181,11 +188,12 @@ def modify_train_path(model, cfg_path):
 def modify_train_param(bs, nc, li, ei, ep, lr, ver):
     yml = load_yaml_data_in_fact()
     data_path = yml['dataset_path']
-    json_path = yml['train_ms']['config_path']
-    whole_path = os.path.join(data_path, json_path).replace('\\', '/')
+    cfg_path = yml['train_ms']['config_path']
     ok = False
+    whole_path = os.path.join(data_path, cfg_path).replace("\\", "/")
+    logger.info("config_path: ", whole_path)
     if not os.path.exists(whole_path):
-        shutil.copy("configs/config.json", whole_path)
+        shutil.copy("configs/config.json", os.path.dirname(whole_path))
     if os.path.exists(whole_path) and os.path.isfile(whole_path):
         ok = True
         with open(whole_path, 'r', encoding='utf-8') as file:
