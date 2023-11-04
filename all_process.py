@@ -805,21 +805,21 @@ if __name__ == '__main__':
                                     lines=1,
                                     autoscroll=True
                                 )
-                    with gr.TabItem("TensorBoard"):
-                        with gr.Row():
-                            gr.Markdown("""
-                                ### Tensorboard的logdir 默认为训练的models路径
-                                ### 请在前一节 `训练配置文件路径` 查看
-                            """)
-                        with gr.Row():
-                            open_tb_btn = gr.Button("开启Tensorboard")
-                            stop_tb_btn = gr.Button("关闭Tensorboard")
-                        with gr.Row():
-                            tb_output_box = gr.Textbox(
-                                label="状态信息",
-                                lines=1,
-                                autoscroll=True
-                            )
+                        with gr.TabItem("TensorBoard"):
+                            with gr.Row():
+                                gr.Markdown("""
+                                    ### Tensorboard的logdir 默认为训练的models路径
+                                    ### 请在前一节 `训练配置文件路径` 查看
+                                """)
+                            with gr.Row():
+                                open_tb_btn = gr.Button("开启Tensorboard")
+                                stop_tb_btn = gr.Button("关闭Tensorboard")
+                            with gr.Row():
+                                tb_output_box = gr.Textbox(
+                                    label="状态信息",
+                                    lines=1,
+                                    autoscroll=True
+                                )
                 with gr.TabItem("推理界面"):
                     with gr.Tabs():
                         with gr.TabItem("模型选择"):
