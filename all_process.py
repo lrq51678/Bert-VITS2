@@ -142,7 +142,7 @@ def modify_preprocess_param(trans_path, cfg_path, val_per_spk, max_val_total):
     yml['preprocess_text']['max_val_total'] = max_val_total
     write_yaml_data_in_fact(yml)
     whole_path = os.path.join(data_path, cfg_path).replace("\\", "/")
-    logger.info("config_path: ", whole_path)
+    logger.info("预处理配置: ", whole_path)
     if not os.path.exists(whole_path):
         shutil.copy("configs/config.json", os.path.dirname(whole_path))
     return gr.Dropdown(value=trans_path), gr.Code(value=load_yaml_data_in_raw())
@@ -169,7 +169,7 @@ def modify_bert_config(cfg_path, nps, dev, multi):
     yml['bert_gen']['use_multi_device'] = multi
     write_yaml_data_in_fact(yml)
     whole_path = os.path.join(data_path, cfg_path).replace("\\", "/")
-    logger.info("config_path: ", whole_path)
+    logger.info("bert配置路径: ", whole_path)
     if not os.path.exists(whole_path):
         shutil.copy("configs/config.json", os.path.dirname(whole_path))
     return gr.Textbox(value=cfg_path), gr.Slider(value=int(nps)), \
@@ -181,6 +181,8 @@ def modify_train_path(model, cfg_path):
     yml['train_ms']['config_path'] = cfg_path
     yml['train_ms']['model'] = model
     write_yaml_data_in_fact(yml)
+    logger.info(f"训练配置文件路径: {cfg_path}\n")
+    logger.info(f"训练模型文件夹路径: {model}")
     return gr.Textbox(value=model), gr.Textbox(value=cfg_path), \
         gr.Code(value=load_yaml_data_in_raw()), check_base_models()
 
@@ -366,7 +368,11 @@ def do_train_ms():
     yml = load_yaml_data_in_fact()
     n_gpus = torch.cuda.device_count()
     # subprocess.run(f'python train_ms.py', shell=True)
-    subprocess.Popen(f'torchrun --nproc_per_node={n_gpus} train_ms.py', shell=True)
+    if platform.system() == 'Linux':
+        cmd = f'torchrun --nproc_per_node={n_gpus} train_ms.py'
+    else:
+        cmd = f'python train_ms.py'
+    subprocess.Popen(cmd, shell=True)
     train_port = yml['train_ms']['env']['MASTER_PORT']
     train_addr = yml['train_ms']['env']['MASTER_ADDR']
     url = f'http://{train_addr}:{train_port}'
@@ -382,7 +388,7 @@ def do_tensorboard():
     whole_dir = os.path.join(data_path, train_model_dir).replace('\\', '/')
     tb_cmd = f'tensorboard --logdir={whole_dir} ' \
              f'--port={11451} ' \
-             f'--window_title=\"训练情况一览\"' \
+             f'--window_title=\"训练情况一览\" ' \
              f'--reload_interval={120}'
     subprocess.Popen(tb_cmd, shell=True)
     url = f"http://localhost:{11451}"
@@ -402,44 +408,37 @@ def do_webui_infer():
     return gr.Textbox(value=msg)
 
 
-def kill_process_on_port_linux(port):
+def kill_specific_process_linux(cmd):
     try:
-        lsof_command = f"lsof -i tcp:{port}"
-        output = subprocess.check_output(lsof_command, shell=True).decode()
-        lines = output.strip().split('\n')
-        pid = int(lines[1].split()[1])
-        os.kill(pid, signal.SIGTERM)
-        logger.info(f"成功关闭端口 {port} 上的进程（PID: {pid}）")
+        output = subprocess.check_output(["pgrep", "-f", cmd], text=True)
+        pids = output.strip().split('\n')
 
+        for pid in pids:
+            if pid:
+                logger.critical(f"终止进程: {pid}")
+                os.kill(int(pid), signal.SIGTERM)
+                # os.kill(int(pid), signal.SIGKILL) 
     except subprocess.CalledProcessError:
-        logger.error(f"没有在端口 {port} 上找到进程")
-    except IndexError:
-        logger.error(f"解析PID时出错，请检查'lsof'命令的输出")
+        logger.error("没有找到匹配的进程。")
     except Exception as e:
-        logger.error(f"关闭进程时出现错误: {e}")
+        logger.error(f"发生错误: {e}")
 
 
-def kill_process_on_port_windows(port):
+def kill_specific_process_windows(cmd):
     try:
-        netstat_command = f"netstat -ano | findstr :{port}"
-        output = subprocess.check_output(netstat_command, shell=True).decode()
+        # 使用tasklist和findstr来找到匹配特定命令行模式的进程
+        output = subprocess.check_output(f'tasklist /FO CSV /V | findstr /C:"{cmd}"', shell=True, text=True)
         lines = output.strip().split('\n')
-        pid = None
+
         for line in lines:
-            parts = line.strip().split()
-            if f":{port}" in parts[1] and parts[1].endswith(f":{port}"):  # Local Address column
-                pid = parts[-1]  # PID is the last column
-                break
-        if pid is None:
-            logger.info(f"没有在端口 {port} 上找到进程")
-            return
-        taskkill_command = f"taskkill /PID {pid} /F"
-        subprocess.check_output(taskkill_command, shell=True)
-        logger.error(f"成功关闭端口 {port} 上的进程（PID: {pid}）")
+            if line:
+                pid = line.split(',')[1].strip('"')
+                logger.critical(f"终止进程: {pid}")
+                subprocess.run(["taskkill", "/PID", pid, "/F"], shell=True)  # 强制终止
     except subprocess.CalledProcessError:
-        logger.error(f"没有在端口 {port} 上找到进程")
+        logger.error(f"没有找到匹配的{cmd}进程。")
     except Exception as e:
-        logger.error(f"关闭进程时出现错误: {e}")
+        logger.error(f"发生错误: {e}")
 
 
 def stop_train_ms():
@@ -447,9 +446,9 @@ def stop_train_ms():
     train_port = yml['train_ms']['env']['MASTER_PORT']
     train_addr = yml['train_ms']['env']['MASTER_ADDR']
     if platform.system() == "Windows":
-        kill_process_on_port_windows(train_port)
+        kill_specific_process_windows('python train_ms.py')
     else:
-        kill_process_on_port_linux(train_port)
+        kill_specific_process_linux('torchrun')
     url = f'http://{train_addr}:{train_port}'
     msg = f"训练结束!\nMASTER_URL: {url}"
     logger.critical(msg)
@@ -458,9 +457,9 @@ def stop_train_ms():
 
 def stop_tensorboard():
     if platform.system() == "Windows":
-        kill_process_on_port_windows(11451)
+        kill_specific_process_windows("tensorboard")
     else:
-        kill_process_on_port_linux(11451)
+        kill_specific_process_linux("tensorboard")
     msg = f"关闭tensorboard!\n"
     logger.critical(msg)
     return gr.Textbox(value=msg)
@@ -470,9 +469,9 @@ def stop_webui_infer():
     yml = load_yaml_data_in_fact()
     webui_port = yml['webui']['port']
     if platform.system() == "Linux":
-        kill_process_on_port_linux(webui_port)
+        kill_specific_process_linux('python webui.py')
     else:
-        kill_process_on_port_windows(webui_port)
+        kill_specific_process_windows('python webui.py')
     msg = f"尝试终止推理进程，请到控制台查看情况\nport={webui_port}"
     logger.critical(msg)
     return gr.Textbox(value=msg)
@@ -794,11 +793,10 @@ if __name__ == '__main__':
                                     value="更改训练参数配置",
                                     variant="primary"
                                 )
-                                stop_train_btn = gr.Button(value="终止训练（请手动关闭窗口）",
-                                                           variant="secondary")
                             with gr.Row():
                                 train_btn = gr.Button(value="3.1 点击开始训练", variant="primary")
                                 train_btn_2 = gr.Button(value="3.2 继续训练", variant="primary")
+                                stop_train_btn = gr.Button(value="终止训练", variant="secondary")
                             with gr.Row():
                                 train_output_box = gr.Textbox(
                                     label="状态信息",
