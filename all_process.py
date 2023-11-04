@@ -182,7 +182,7 @@ def modify_train_path(model, cfg_path):
     yml['train_ms']['model'] = model
     write_yaml_data_in_fact(yml)
     return gr.Textbox(value=model), gr.Textbox(value=cfg_path), \
-        gr.Code(value=load_yaml_data_in_raw())
+        gr.Code(value=load_yaml_data_in_raw()), check_base_models()
 
 
 def modify_train_param(bs, nc, li, ei, ep, lr, ver):
@@ -920,7 +920,8 @@ if __name__ == '__main__':
                                          ])
         train_ms_path_btn.click(fn=modify_train_path,
                                 inputs=[train_model_box, train_config_box],
-                                outputs=[train_model_box, train_config_box, code_config_yml])
+                                outputs=[train_model_box, train_config_box, code_config_yml,
+                                         CheckboxGroup_train_models])
         train_ms_param_btn.click(fn=modify_train_param,
                                  inputs=[slider_batch_size, slider_keep_ckpts,
                                          slider_log_interval, slider_eval_interval,
