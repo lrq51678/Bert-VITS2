@@ -366,10 +366,28 @@ def do_train_ms():
     yml = load_yaml_data_in_fact()
     n_gpus = torch.cuda.device_count()
     # subprocess.run(f'python train_ms.py', shell=True)
-    subprocess.run(f'torchrun --nproc_per_node={n_gpus} train_ms.py', shell=True)
-    webui_port = yml['train_ms']['env']['MASTER_PORT']
-    url = f'http://localhost:{webui_port}'
+    subprocess.Popen(f'torchrun --nproc_per_node={n_gpus} train_ms.py', shell=True)
+    train_port = yml['train_ms']['env']['MASTER_PORT']
+    train_addr = yml['train_ms']['env']['MASTER_ADDR']
+    url = f'http://{train_addr}:{train_port}'
     msg = f"训练开始!\nMASTER_URL: {url}"
+    logger.info(msg)
+    return gr.Textbox(value=msg)
+
+
+def do_tensorboard():
+    yml = load_yaml_data_in_fact()
+    data_path = yml['dataset_path']
+    train_model_dir = yml['train_ms']['model']
+    whole_dir = os.path.join(data_path, train_model_dir).replace('\\', '/')
+    tb_cmd = f'tensorboard --logdir={whole_dir} ' \
+             f'--port={11451} ' \
+             f'--window_title=\"训练情况一览\"' \
+             f'--reload_interval={120}'
+    subprocess.Popen(tb_cmd, shell=True)
+    url = f"http://localhost:{11451}"
+    webbrowser.open(url=url)
+    msg = tb_cmd + '\n' + url
     logger.info(msg)
     return gr.Textbox(value=msg)
 
@@ -377,7 +395,7 @@ def do_train_ms():
 def do_webui_infer():
     yml = load_yaml_data_in_fact()
     webui_port = yml['webui']['port']
-    subprocess.run('python webui.py', shell=True)
+    subprocess.Popen('python webui.py', shell=True)
     url = f'http://localhost:{webui_port} | http://127.0.0.1:{webui_port}'
     msg = f"推理端已开启, 到控制台中复制网址打开页面\n{url}"
     logger.info(msg)
@@ -424,14 +442,42 @@ def kill_process_on_port_windows(port):
         logger.error(f"关闭进程时出现错误: {e}")
 
 
-def stop_webui_infer(port):
-    if platform.system() == "Linux":
-        kill_process_on_port_linux(port)
+def stop_train_ms():
+    yml = load_yaml_data_in_fact()
+    train_port = yml['train_ms']['env']['MASTER_PORT']
+    train_addr = yml['train_ms']['env']['MASTER_ADDR']
+    if platform.system() == "Windows":
+        kill_process_on_port_windows(train_port)
     else:
-        kill_process_on_port_windows(port)
-    msg = "尝试终止推理进程，请到控制台查看情况"
+        kill_process_on_port_linux(train_port)
+    url = f'http://{train_addr}:{train_port}'
+    msg = f"训练结束!\nMASTER_URL: {url}"
     logger.critical(msg)
     return gr.Textbox(value=msg)
+
+
+def stop_tensorboard():
+    if platform.system() == "Windows":
+        kill_process_on_port_windows(11451)
+    else:
+        kill_process_on_port_linux(11451)
+    msg = f"关闭tensorboard!\n"
+    logger.critical(msg)
+    return gr.Textbox(value=msg)
+
+
+def stop_webui_infer():
+    yml = load_yaml_data_in_fact()
+    webui_port = yml['webui']['port']
+    if platform.system() == "Linux":
+        kill_process_on_port_linux(webui_port)
+    else:
+        kill_process_on_port_windows(webui_port)
+    msg = f"尝试终止推理进程，请到控制台查看情况\nport={webui_port}"
+    logger.critical(msg)
+    return gr.Textbox(value=msg)
+
+
 
 
 if __name__ == '__main__':
@@ -759,6 +805,21 @@ if __name__ == '__main__':
                                     lines=1,
                                     autoscroll=True
                                 )
+                    with gr.TabItem("TensorBoard"):
+                        with gr.Row():
+                            gr.Markdown("""
+                                ### Tensorboard的logdir 默认为训练的models路径
+                                ### 请在前一节 `训练配置文件路径` 查看
+                            """)
+                        with gr.Row():
+                            open_tb_btn = gr.Button("开启Tensorboard")
+                            stop_tb_btn = gr.Button("关闭Tensorboard")
+                        with gr.Row():
+                            tb_output_box = gr.Textbox(
+                                label="状态信息",
+                                lines=1,
+                                autoscroll=True
+                            )
                 with gr.TabItem("推理界面"):
                     with gr.Tabs():
                         with gr.TabItem("模型选择"):
@@ -933,6 +994,15 @@ if __name__ == '__main__':
         train_btn_2.click(fn=do_train_ms,
                           inputs=[],
                           outputs=[train_output_box])
+        stop_train_btn.click(fn=stop_train_ms,
+                             inputs=[],
+                             outputs=[train_output_box])
+        open_tb_btn.click(fn=do_tensorboard,
+                          inputs=[],
+                          outputs=[tb_output_box])
+        stop_tb_btn.click(fn=stop_tensorboard,
+                          inputs=[],
+                          outputs=[tb_output_box])
         dropdown_model_fresh_btn.click(fn=list_infer_models,
                                        inputs=[],
                                        outputs=[dropdown_infer_model, dropdown_infer_config])
@@ -949,7 +1019,7 @@ if __name__ == '__main__':
         )
         stop_infer_btn.click(
             fn=stop_webui_infer,
-            inputs=[webui_port_box],
+            inputs=[],
             outputs=[infer_webui_box]
         )
         gpu_json_btn.click(
